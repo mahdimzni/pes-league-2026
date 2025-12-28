@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import pes_engine as pes
+import time
 
 # تنظیمات صفحه (عنوان تب مرورگر و آیکون)
 st.set_page_config(page_title="PES League Hub", page_icon="⚽", layout="wide")
@@ -21,9 +22,14 @@ try:
     # کش کردن داده‌ها برای سرعت بیشتر (دیگر هربار دانلود نمی‌کند مگر دکمه را بزنید)
     @st.cache_data(ttl=180)  # کش برای 10 دقیقه معتبر است
     def load_data():
-        # لینک مستقیم گوگل شیت شما
-        sheet_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRail3nDcqqJqeIQetw8qS0SO4rT4TH4atQ6rhUQW3aHrE64ERb9Np_FPQtil0kZw/pub?output=xlsx"
-        return pd.read_excel(sheet_url)
+        # لینک اصلی گوگل شیت
+        base_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRail3nDcqqJqeIQetw8qS0SO4rT4TH4atQ6rhUQW3aHrE64ERb9Np_FPQtil0kZw/pub?output=xlsx"
+        
+        # ترفند مهم: اضافه کردن یک عدد تصادفی به تهِ لینک
+        # این کار باعث می‌شود گوگل فکر کند این یک درخواست جدید است و کش را دور می‌زند
+        final_url = f"{base_url}&v={time.time()}"
+        
+        return pd.read_excel(final_url)
     
     df = load_data()
     
