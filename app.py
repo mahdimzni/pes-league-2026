@@ -19,7 +19,7 @@ st.markdown("---")
 # 1. بارگذاری داده‌ها از گوگل شیت
 try:
     # کش کردن داده‌ها برای سرعت بیشتر (دیگر هربار دانلود نمی‌کند مگر دکمه را بزنید)
-    @st.cache_data(ttl=600)  # کش برای 10 دقیقه معتبر است
+    @st.cache_data(ttl=180)  # کش برای 10 دقیقه معتبر است
     def load_data():
         # لینک مستقیم گوگل شیت شما
         sheet_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRail3nDcqqJqeIQetw8qS0SO4rT4TH4atQ6rhUQW3aHrE64ERb9Np_FPQtil0kZw/pub?output=xlsx"
