@@ -7,7 +7,6 @@ from functools import cmp_to_key
 # ==========================================
 
 def check_h2h_aggregate(df, season_id, p1, p2):
-    # این تابع کمکی برای get_season_table است و بدون تغییر باقی مانده
     matches = df[(df['season_id'] == season_id) & 
                  (((df['p1_name'] == p1) & (df['p2_name'] == p2)) | 
                   ((df['p1_name'] == p2) & (df['p2_name'] == p1)))]
@@ -29,7 +28,7 @@ def get_season_table(df, season_id):
     for p in players:
         matches = season_df[(season_df['p1_name'] == p) | (season_df['p2_name'] == p)]
         
-        # --- تغییر ۱: محاسبه تعداد بازی‌ها ---
+        # محاسبه تعداد بازی‌ها
         matches_played = len(matches)
         
         points = 0; gf = 0; ga = 0
@@ -43,7 +42,6 @@ def get_season_table(df, season_id):
                 if row['p2_score'] > row['p1_score']: points += 3
                 elif row['p2_score'] == row['p1_score']: points += 1
         
-        # اضافه کردن Matches به دیکشنری دیتا
         data.append({'Player': p, 'Matches': matches_played, 'Points': points, 'GD': gf - ga, 'GF': gf, 'GA': ga})
 
     def compare_players(item1, item2):
@@ -60,7 +58,6 @@ def get_season_table(df, season_id):
     df_table = pd.DataFrame(sorted_data)
     
     if not df_table.empty:
-        # --- تغییر ۲: اضافه کردن ستون Matches بعد از Player ---
         df_table = df_table[['Player', 'Matches', 'Points', 'GF', 'GA', 'GD']]
         df_table = df_table.rename(columns={'GF': '+', 'GA': '-'})
         df_table.index = range(1, len(df_table) + 1)
@@ -71,7 +68,7 @@ def get_champion(df, season_id):
     table = get_season_table(df, season_id)
     if table.empty: return "No Data"
     
-    # --- تغییر ۳: چک کردن برابری تعداد بازی‌ها ---
+    # اگر تعداد بازی‌ها برابر نباشد
     if table['Matches'].nunique() > 1:
         return "there is no champion in this season"
         
@@ -87,10 +84,8 @@ def get_all_time_summary(df):
     golden_cups = {}
     ultra_golden_cups = {}
     
-    # --- محاسبه جام‌ها (بدون تغییر) ---
     for s in seasons:
         c_name = get_champion(df, s)
-        # اگر قهرمان معتبر نباشد در آمار نیاید
         if c_name == "there is no champion in this season" or c_name == "No Data":
             continue
 
@@ -109,14 +104,11 @@ def get_all_time_summary(df):
             if wins == total_games and total_games > 0: ultra_golden_cups[c_name] = ultra_golden_cups.get(c_name, 0) + 1
             else: golden_cups[c_name] = golden_cups.get(c_name, 0) + 1
 
-    # --- محاسبه آمار کلی ---
     players = set(df['p1_name'].unique()) | set(df['p2_name'].unique())
     stats_data = []
     
     for p in players:
         matches = df[(df['p1_name'] == p) | (df['p2_name'] == p)]
-        
-        # محاسبه تعداد بازی‌ها
         total_matches = len(matches)
         
         wins = 0; draws = 0; losses = 0; total_points = 0
@@ -133,11 +125,9 @@ def get_all_time_summary(df):
             elif my_s == op_s: draws += 1; total_points += 1
             else: losses += 1
         
-        # میانگین‌ها
         if total_matches > 0:
             avg_gf = round(total_gf / total_matches, 2)
             avg_ga = round(total_ga / total_matches, 2)
-            # محاسبه امتیاز در هر بازی (تا ۳ رقم اعشار)
             ppm = round(total_points / total_matches, 3)
         else:
             avg_gf = 0; avg_ga = 0; ppm = 0
@@ -147,25 +137,21 @@ def get_all_time_summary(df):
             'Championships': champ_counts.get(p, 0),
             'Ultra Golden': ultra_golden_cups.get(p, 0),
             'Golden Cup': golden_cups.get(p, 0),
-            'Matches': total_matches,  # ستون جدید تعداد بازی
+            'Matches': total_matches,
             'Wins': wins, 'Draws': draws, 'Losses': losses,
-            'Point per Match': ppm,    # ستون جدید جایگزین امتیاز کل
+            'Point per Match': ppm,
             'XG_F': avg_gf, 'XG_A': avg_ga,
             '+': total_gf, '-': total_ga, 'GD': total_gf - total_ga
         })
         
     summary_df = pd.DataFrame(stats_data)
-    
-    # لگاسی (اختیاری، جهت اطمینان از فرمت قبلی)
     if 'Ultra Golden' not in summary_df.columns: summary_df['Ultra Golden'] = 0
 
-    # محاسبه درصدها
     total_games_col = summary_df['Wins'] + summary_df['Draws'] + summary_df['Losses']
     summary_df['Win %'] = (summary_df['Wins'] / total_games_col * 100).fillna(0).round(1)
     summary_df['Draw %'] = (summary_df['Draws'] / total_games_col * 100).fillna(0).round(1)
     summary_df['Loss %'] = (summary_df['Losses'] / total_games_col * 100).fillna(0).round(1)
 
-    # چیدمان ستون‌ها (Matches قبل از Wins و Point per Match در آخر)
     column_order = [
         'Player', 'Championships', 'Ultra Golden', 'Golden Cup',
         'Matches', 'Wins', 'Draws', 'Losses',
@@ -175,26 +161,21 @@ def get_all_time_summary(df):
         'Point per Match'
     ]
     summary_df = summary_df[column_order]
-
-    # مرتب‌سازی بر اساس میانگین امتیاز (Point per Match)
     summary_df = summary_df.sort_values(by=['Point per Match', 'GD'], ascending=[False, False])
-    
     summary_df.index = range(1, len(summary_df) + 1)
     return summary_df
+
 # ==========================================
 # بخش ۳: ابزارهای جستجو و آمار پیشرفته
 # ==========================================
 
 def get_podium_stats(df):
-    # دقیقا همان کد رفرنس شما بدون تغییر
     all_players = list(set(df['p1_name'].unique()) | set(df['p2_name'].unique()))
     stats = {p: {1: 0, 2: 0, 3: 0, 4: 0} for p in all_players}
     seasons = sorted(df['season_id'].unique())
     
     for s in seasons:
         table = get_season_table(df, s)
-        
-        # اگر جدول خالی است یا بازی‌ها نابرابر است، سکو محاسبه نشود
         if table.empty or table['Matches'].nunique() > 1:
             continue
 
@@ -208,7 +189,6 @@ def get_podium_stats(df):
     return result_df
 
 def get_detailed_h2h(df):
-    # دقیقا همان کد رفرنس شما بدون تغییر
     players = sorted(list(set(df['p1_name'].unique()) | set(df['p2_name'].unique())))
     table_data = []
     win_matrix = pd.DataFrame(0, index=players, columns=players)
@@ -242,7 +222,6 @@ def get_detailed_h2h(df):
     return pd.DataFrame(table_data), win_matrix
 
 def get_match_history(df, p1, p2, target='all'):
-    # دقیقا همان کد رفرنس شما بدون تغییر
     if target != 'all': matches_df = df[df['season_id'] == target]
     else: matches_df = df
     mask = (((matches_df['p1_name'] == p1) & (matches_df['p2_name'] == p2)) |
@@ -258,7 +237,6 @@ def get_match_history(df, p1, p2, target='all'):
     return result_df
 
 def get_high_scores(df, p1=None, p2=None, min_goals=None, min_diff=None):
-    # دقیقا همان کد رفرنس شما بدون تغییر
     temp_df = df.copy()
     temp_df['goal_diff'] = abs(temp_df['p1_score'] - temp_df['p2_score'])
     final_mask = pd.Series([True] * len(temp_df), index=temp_df.index)
@@ -269,15 +247,7 @@ def get_high_scores(df, p1=None, p2=None, min_goals=None, min_diff=None):
     elif p2 and not p1: final_mask &= ((temp_df['p1_name'] == p2) | (temp_df['p2_name'] == p2))
     
     filtered_df = temp_df[final_mask]
-    if not filtered_df.empty:
-        top_3 = filtered_df.sort_values(by='goal_diff', ascending=False).head(3)
-        print("--- Top 3 Heaviest Matches (in this search) ---")
-        for _, row in top_3.iterrows():
-            if row['p1_score'] > row['p2_score']: w_n, l_n, w_s, l_s = row['p1_name'], row['p2_name'], row['p1_score'], row['p2_score']
-            else: w_n, l_n, w_s, l_s = row['p2_name'], row['p1_name'], row['p2_score'], row['p1_score']
-            print(f"{w_n}: {w_s} vs {l_s} : {l_n}")
-        print("-" * 48 + "\n")
-
+    
     data = []
     for _, row in filtered_df.iterrows():
         n1, n2 = row['p1_name'], row['p2_name']; s1, s2 = row['p1_score'], row['p2_score']
@@ -299,16 +269,12 @@ def get_high_scores(df, p1=None, p2=None, min_goals=None, min_diff=None):
 
 def get_extreme_stats(df):
     summary = get_all_time_summary(df)
-    
-    # تعریف متریک‌ها بر اساس «نرخ» و «میانگین» به جای تعداد کل
     metrics = [
-        # --- آمارهای مثبت ---
         {'Type': 'Good', 'Title': 'Highest Win Rate', 'Col': 'Win %', 'Func': 'max', 'Unit': '%'},
         {'Type': 'Good', 'Title': 'Lowest Loss Rate', 'Col': 'Loss %', 'Func': 'min', 'Unit': '%'},
-        {'Type': 'Good', 'Title': 'Highest Avg Goals Scored', 'Col': 'XG_F', 'Func': 'max', 'Unit': ''}, # میانگین گل زده
-        {'Type': 'Good', 'Title': 'Best Defense (Lowest Avg GA)', 'Col': 'XG_A', 'Func': 'min', 'Unit': ''}, # میانگین گل خورده
+        {'Type': 'Good', 'Title': 'Highest Avg Goals Scored', 'Col': 'XG_F', 'Func': 'max', 'Unit': ''}, 
+        {'Type': 'Good', 'Title': 'Best Defense (Lowest Avg GA)', 'Col': 'XG_A', 'Func': 'min', 'Unit': ''}, 
 
-        # --- آمارهای منفی ---
         {'Type': 'Bad', 'Title': 'Lowest Win Rate', 'Col': 'Win %', 'Func': 'min', 'Unit': '%'},
         {'Type': 'Bad', 'Title': 'Highest Loss Rate', 'Col': 'Loss %', 'Func': 'max', 'Unit': '%'},
         {'Type': 'Bad', 'Title': 'Lowest Avg Goals Scored', 'Col': 'XG_F', 'Func': 'min', 'Unit': ''},
@@ -318,22 +284,14 @@ def get_extreme_stats(df):
     data = []
     for item in metrics:
         col = item['Col']
-        
-        # محاسبه مقدار اکسترمم (حداقل یا حداکثر)
-        if item['Func'] == 'max':
-            val = summary[col].max()
-        else:
-            val = summary[col].min()
+        if item['Func'] == 'max': val = summary[col].max()
+        else: val = summary[col].min()
 
-        # پیدا کردن بازیکنانی که این رکورد را دارند
         players = summary[summary[col] == val]['Player'].tolist()
         player_str = ", ".join(players)
 
-        # فرمت‌دهی خروجی (اضافه کردن درصد اگر لازم باشد)
-        if item['Unit'] == '%':
-            val_str = f"{val}%"
-        else:
-            val_str = str(val)
+        if item['Unit'] == '%': val_str = f"{val}%"
+        else: val_str = str(val)
 
         data.append({
             'Category': item['Type'],
@@ -343,19 +301,15 @@ def get_extreme_stats(df):
         })
 
     result_df = pd.DataFrame(data)
-    if not result_df.empty:
-        result_df.index = range(1, len(result_df) + 1)
-        
+    if not result_df.empty: result_df.index = range(1, len(result_df) + 1)
     return result_df
 
 def get_winning_streaks(df):
-    # دقیقا همان کد رفرنس شما بدون تغییر
     seasons = sorted(df['season_id'].unique())
     if not seasons: return pd.DataFrame()
     timeline = []
     for s in seasons:
         champ = get_champion(df, s)
-        # فقط اگر قهرمان معتبر باشد در استریک حساب شود
         if champ != "there is no champion in this season" and champ != "No Data":
             timeline.append(champ)
 
