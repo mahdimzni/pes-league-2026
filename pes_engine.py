@@ -6,18 +6,46 @@ from functools import cmp_to_key
 # بخش ۱: منطق بازی، جدول و قهرمانی
 # ==========================================
 
-def check_h2h_aggregate(df, season_id, p1, p2):
+def check_h2h_winner(df, season_id, p1, p2):
+    """
+    برنده بازی رو در رو را مشخص می‌کند.
+    اولويت ۱: امتیاز بیشتر در بازی‌های بین دو نفر
+    اولویت ۲: تفاضل گل بهتر در بازی‌های بین دو نفر
+    """
     matches = df[(df['season_id'] == season_id) & 
                  (((df['p1_name'] == p1) & (df['p2_name'] == p2)) | 
                   ((df['p1_name'] == p2) & (df['p2_name'] == p1)))]
     
+    if matches.empty:
+        return None
+
+    p1_pts = 0; p2_pts = 0
     p1_goals = 0; p2_goals = 0
+
     for _, row in matches.iterrows():
-        if row['p1_name'] == p1: p1_goals += row['p1_score']; p2_goals += row['p2_score']
-        else: p1_goals += row['p2_score']; p2_goals += row['p1_score']
-            
+        # تشخیص اینکه کدام بازیکن p1 است و کدام p2 در این ردیف
+        if row['p1_name'] == p1:
+            my_s, op_s = row['p1_score'], row['p2_score']
+        else:
+            my_s, op_s = row['p2_score'], row['p1_score']
+        
+        p1_goals += my_s
+        p2_goals += op_s
+
+        if my_s > op_s: p1_pts += 3
+        elif op_s > my_s: p2_pts += 3
+        else:
+            p1_pts += 1
+            p2_pts += 1
+
+    # مقایسه امتیاز رو در رو
+    if p1_pts > p2_pts: return p1
+    if p2_pts > p1_pts: return p2
+    
+    # مقایسه تفاضل گل رو در رو (اگر امتیاز برابر بود)
     if p1_goals > p2_goals: return p1
     if p2_goals > p1_goals: return p2
+    
     return None
 
 def get_season_table(df, season_id):
@@ -27,34 +55,53 @@ def get_season_table(df, season_id):
 
     for p in players:
         matches = season_df[(season_df['p1_name'] == p) | (season_df['p2_name'] == p)]
-        
-        # محاسبه تعداد بازی‌ها
         matches_played = len(matches)
         
         points = 0; gf = 0; ga = 0
         for _, row in matches.iterrows():
             if row['p1_name'] == p:
-                gf += row['p1_score']; ga += row['p2_score']
-                if row['p1_score'] > row['p2_score']: points += 3
-                elif row['p1_score'] == row['p2_score']: points += 1
+                my_s, op_s = row['p1_score'], row['p2_score']
             else:
-                gf += row['p2_score']; ga += row['p1_score']
-                if row['p2_score'] > row['p1_score']: points += 3
-                elif row['p2_score'] == row['p1_score']: points += 1
+                my_s, op_s = row['p2_score'], row['p1_score']
+            
+            gf += my_s
+            ga += op_s
+            
+            if my_s > op_s: points += 3
+            elif my_s == op_s: points += 1
         
-        data.append({'Player': p, 'Matches': matches_played, 'Points': points, 'GD': gf - ga, 'GF': gf, 'GA': ga})
+        data.append({
+            'Player': p, 
+            'Matches': matches_played, 
+            'Points': points, 
+            'GD': gf - ga, 
+            'GF': gf, 
+            'GA': ga
+        })
 
+    # تابع مقایسه برای چیدن جدول
     def compare_players(item1, item2):
-        if item1['Points'] != item2['Points']: return item1['Points'] - item2['Points']
-        if item1['GD'] != item2['GD']: return item1['GD'] - item2['GD']
-        if item1['GF'] != item2['GF']: return item1['GF'] - item2['GF']
+        # 1. امتیاز
+        if item1['Points'] != item2['Points']: 
+            return item1['Points'] - item2['Points']
+        
+        # 2. بازی رو در رو
         p1, p2 = item1['Player'], item2['Player']
-        h2h_winner = check_h2h_aggregate(df, season_id, p1, p2)
-        if h2h_winner == p1: return 1
-        if h2h_winner == p2: return -1
-        return 0
+        h2h = check_h2h_winner(df, season_id, p1, p2)
+        
+        if h2h == p1: return 1  # p1 برنده است، پس بالاتر قرار می‌گیرد
+        if h2h == p2: return -1 # p2 برنده است
+        
+        # 3. تفاضل گل کلی
+        if item1['GD'] != item2['GD']: 
+            return item1['GD'] - item2['GD']
+        
+        # 4. گل زده کلی
+        return item1['GF'] - item2['GF']
 
+    # مرتب‌سازی (reverse=True یعنی از بزرگ به کوچک)
     sorted_data = sorted(data, key=cmp_to_key(compare_players), reverse=True)
+    
     df_table = pd.DataFrame(sorted_data)
     
     if not df_table.empty:
@@ -68,14 +115,14 @@ def get_champion(df, season_id):
     table = get_season_table(df, season_id)
     if table.empty: return "No Data"
     
-    # اگر تعداد بازی‌ها برابر نباشد
+    # اگر تعداد بازی‌ها نابرابر باشد
     if table['Matches'].nunique() > 1:
         return "there is no champion in this season"
         
     return table.iloc[0]['Player']
 
 # ==========================================
-# بخش ۲: آمار کلی و تالار افتخارات
+# بخش ۲: آمار کلی (بدون تغییر منطق قبلی)
 # ==========================================
 
 def get_all_time_summary(df):
@@ -166,7 +213,7 @@ def get_all_time_summary(df):
     return summary_df
 
 # ==========================================
-# بخش ۳: ابزارهای جستجو و آمار پیشرفته
+# بخش ۳: ابزارهای کمکی
 # ==========================================
 
 def get_podium_stats(df):
@@ -247,7 +294,6 @@ def get_high_scores(df, p1=None, p2=None, min_goals=None, min_diff=None):
     elif p2 and not p1: final_mask &= ((temp_df['p1_name'] == p2) | (temp_df['p2_name'] == p2))
     
     filtered_df = temp_df[final_mask]
-    
     data = []
     for _, row in filtered_df.iterrows():
         n1, n2 = row['p1_name'], row['p2_name']; s1, s2 = row['p1_score'], row['p2_score']
@@ -274,7 +320,6 @@ def get_extreme_stats(df):
         {'Type': 'Good', 'Title': 'Lowest Loss Rate', 'Col': 'Loss %', 'Func': 'min', 'Unit': '%'},
         {'Type': 'Good', 'Title': 'Highest Avg Goals Scored', 'Col': 'XG_F', 'Func': 'max', 'Unit': ''}, 
         {'Type': 'Good', 'Title': 'Best Defense (Lowest Avg GA)', 'Col': 'XG_A', 'Func': 'min', 'Unit': ''}, 
-
         {'Type': 'Bad', 'Title': 'Lowest Win Rate', 'Col': 'Win %', 'Func': 'min', 'Unit': '%'},
         {'Type': 'Bad', 'Title': 'Highest Loss Rate', 'Col': 'Loss %', 'Func': 'max', 'Unit': '%'},
         {'Type': 'Bad', 'Title': 'Lowest Avg Goals Scored', 'Col': 'XG_F', 'Func': 'min', 'Unit': ''},
@@ -286,20 +331,16 @@ def get_extreme_stats(df):
         col = item['Col']
         if item['Func'] == 'max': val = summary[col].max()
         else: val = summary[col].min()
-
         players = summary[summary[col] == val]['Player'].tolist()
         player_str = ", ".join(players)
-
         if item['Unit'] == '%': val_str = f"{val}%"
         else: val_str = str(val)
-
         data.append({
             'Category': item['Type'],
             'Statistic': item['Title'],
             'Value': val_str,
             'Player(s)': player_str
         })
-
     result_df = pd.DataFrame(data)
     if not result_df.empty: result_df.index = range(1, len(result_df) + 1)
     return result_df
@@ -315,7 +356,6 @@ def get_winning_streaks(df):
 
     streaks_found = []
     if not timeline: return pd.DataFrame()
-    
     curr_p = timeline[0]; curr_l = 1
     for i in range(1, len(timeline)):
         if timeline[i] == curr_p: curr_l += 1
