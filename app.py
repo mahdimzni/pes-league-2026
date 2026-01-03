@@ -10,6 +10,7 @@ st.set_page_config(page_title="PES League Hub", page_icon="⚽", layout="wide")
 st.markdown("""
 <style>
     .big-font { font-size:20px !important; }
+    .stAlert { direction: ltr; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -19,21 +20,20 @@ st.markdown("---")
 
 # 1. بارگذاری داده‌ها از گوگل شیت
 try:
-    # کش کردن داده‌ها برای سرعت بیشتر (دیگر هربار دانلود نمی‌کند مگر دکمه را بزنید)
-    @st.cache_data(ttl=180)  # کش برای 10 دقیقه معتبر است
+    # کش کردن داده‌ها (همان تنظیماتی که دوست داشتید)
+    @st.cache_data(ttl=60)  # زمان کش را روی 1 دقیقه گذاشتم که سریعتر هم باشد
     def load_data():
         # لینک اصلی گوگل شیت
         base_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRail3nDcqqJqeIQetw8qS0SO4rT4TH4atQ6rhUQW3aHrE64ERb9Np_FPQtil0kZw/pub?output=xlsx"
         
-        # ترفند مهم: اضافه کردن یک عدد تصادفی به تهِ لینک
-        # این کار باعث می‌شود گوگل فکر کند این یک درخواست جدید است و کش را دور می‌زند
+        # ترفند مهم: اضافه کردن یک عدد تصادفی به تهِ لینک برای دور زدن کش گوگل
         final_url = f"{base_url}&v={time.time()}"
         
         return pd.read_excel(final_url)
     
     df = load_data()
     
-    # دکمه رفرش دستی
+    # دکمه رفرش دستی در سایدبار
     if st.sidebar.button('🔄 Update Data'):
         st.cache_data.clear()
         st.rerun()
@@ -54,24 +54,36 @@ if choice == "League Table":
     st.header("🏆 Season Standings")
     
     # انتخاب فصل
-    seasons = sorted(df['season_id'].unique())
-    if seasons:
-        selected_season = st.selectbox("Select Season:", seasons, index=len(seasons)-1)
+    all_seasons = sorted(df['season_id'].unique())
+    if all_seasons:
+        # انتخاب آخرین فصل به صورت پیش‌فرض
+        selected_season = st.selectbox("Select Season:", all_seasons, index=len(all_seasons)-1)
         
         col1, col2 = st.columns([2, 1])
         
         with col1:
             st.subheader(f"Table - Season {selected_season}")
+            # فراخوانی جدول (با ستون جدید Matches)
             table = pes.get_season_table(df, selected_season)
-            st.dataframe(table, use_container_width=True)
+            if not table.empty:
+                st.dataframe(table, use_container_width=True)
+            else:
+                st.info("No matches played in this season yet.")
             
         with col2:
-            st.subheader("Champion")
+            st.subheader("Champion Status")
             champ = pes.get_champion(df, selected_season)
-            if champ != "No Data":
-                st.info(f"🥇 {champ}")
-                if champ != "No Data":
-                    st.balloons()
+            
+            # --- هماهنگ‌سازی با موتور جدید ---
+            # اگر پیام نابرابری بازی‌ها یا نبود داده برگشت داده شد:
+            if "there is no champion" in champ or champ == "No Data":
+                st.warning(f"⚠️ {champ}")
+                st.caption("All players must have equal matches to declare a champion.")
+            else:
+                # اگر قهرمان معتبر بود
+                st.success(f"🥇 {champ}")
+                st.balloons()
+                
     else:
         st.warning("No seasons found in the database.")
 
@@ -82,8 +94,16 @@ elif choice == "All-Time Legends":
     tab1, tab2 = st.tabs(["General Summary", "Podium Finishes"])
     
     with tab1:
+        st.subheader("🌍 All-Time Table (Sorted by Point per Match)")
         summary = pes.get_all_time_summary(df)
-        st.dataframe(summary, use_container_width=True, height=500)
+        
+        # نمایش جدول با هایلایت روی ستون جدید Point per Match
+        st.dataframe(
+            summary.style.background_gradient(subset=['Point per Match'], cmap="Greens"), 
+            use_container_width=True, 
+            height=600
+        )
+        st.info("💡 Note: Rankings are now based on 'Point per Match' (Average Points).")
         
     with tab2:
         st.subheader("🏅 Podium Finishes (1st - 4th)")
@@ -96,10 +116,15 @@ elif choice == "Stats & Streaks":
     c1, c2 = st.columns(2)
     with c1:
         st.subheader("🔥 Winning Streaks")
-        st.table(pes.get_winning_streaks(df))
+        streaks = pes.get_winning_streaks(df)
+        if not streaks.empty:
+            st.table(streaks)
+        else:
+            st.info("No consecutive title streaks yet.")
         
     with c2:
-        st.subheader("📈 Good & Bad Stats")
+        st.subheader("📈 League Records (Rates & Averages)")
+        # این تابع الان مقادیر درصدی و میانگین را برمی‌گرداند
         st.table(pes.get_extreme_stats(df))
 
 # --- بخش چهارم: بازی‌های رو در رو ---
